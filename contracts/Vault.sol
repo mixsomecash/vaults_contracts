@@ -3,10 +3,9 @@ pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/ownership/Ownable.sol";
 import "./interfaces/ILido.sol";
 
-contract Vault is ReentrancyGuard, Ownable {
+contract Vault is ReentrancyGuard {
   address private operator;
   address public depositTokenAddress;
   address public withdrawTokenAddress;
@@ -20,7 +19,16 @@ contract Vault is ReentrancyGuard, Ownable {
   bool public isStrategyWithdrawable = false;
   ILido public lido;
 
-  constructor(address _operator, address _depositTokenAddress, address _withdrawTokenAddress,  address _strategyAddress, uint256 _fee, uint256 _lowerFeeBound, uint256 _upperFeeBound, bool _isERC20) {
+  constructor(
+    address _operator,
+    address _depositTokenAddress,
+    address _withdrawTokenAddress,
+    address _strategyAddress,
+    uint256 _fee,
+    uint256 _lowerFeeBound,
+    uint256 _upperFeeBound,
+    bool _isERC20
+  ) {
     operator = _operator;
     depositTokenAddress = _depositTokenAddress;
     withdrawTokenAddress = _withdrawTokenAddress;
@@ -31,32 +39,41 @@ contract Vault is ReentrancyGuard, Ownable {
     isVaultERC20 = _isERC20;
   }
 
+  modifier onlyOperator() {
+    require(msg.sender == operator, "Not Operator");
+    _;
+  }
+
+  receive() external payable {
+    depositETH();
+  }
+
   fallback() external payable {
     depositETH();
   }
 
-  function lockVault() public onlyOwner {
+  function lockVault() external onlyOperator {
     isVaultOpen = false;
   }
 
-  function openVault() public onlyOwner {
+  function openVault() external onlyOperator {
     isVaultOpen = true;
   }
 
-  function openWithdraws() public onlyOwner {
+  function openWithdraws() external onlyOperator {
     isStrategyWithdrawable = true;
   }
 
-  function closeWithdraws() public onlyOwner {
+  function closeWithdraws() external onlyOperator {
     isStrategyWithdrawable = false;
   }
 
-  function changeFee(uint256 newFee) public onlyOwner {
+  function changeFee(uint256 newFee) external onlyOperator {
     require(newFee >= feeInterval[0] && newFee <= feeInterval[1], "Invalid fee value");
     fee = newFee;
   }
 
-  function changeFeeInterval(uint256 lowerBound, uint256 upperBound) public onlyOwner {
+  function changeFeeInterval(uint256 lowerBound, uint256 upperBound) external onlyOperator {
     feeInterval = [lowerBound, upperBound];
   }
 
@@ -67,7 +84,7 @@ contract Vault is ReentrancyGuard, Ownable {
     require(sent, "Failed to send Ether");
   }
 
-  function depositERC20(uint256 amount) public nonReentrant{
+  function depositERC20(uint256 amount) external nonReentrant{
     require(isVaultOpen, "Vault is closed");
     uint256 feeAmount = amount * (fee / 100);
     require(IERC20(depositTokenAddress).balanceOf(msg.sender) >= amount + feeAmount, "Insufficient token balance");
@@ -78,17 +95,17 @@ contract Vault is ReentrancyGuard, Ownable {
     total += amount;
   }
 
-  function withdraw(uint256 amount) public nonReentrant returns(uint256, address) {
+  function withdraw(uint256 amount) external nonReentrant returns(uint256, address) {
     require(isVaultOpen, "Vault is closed");
     require(balances[msg.sender] < amount, "Amount is too big");
 
-    bool isSuccessApprove = IERC20(tokenAddress).approve(msg.sender, amount);
-    bool isSuccessTransferFrom = IERC20(tokenAddress).transferFrom(address(this), msg.sender, amount);
+    bool isSuccessApprove = IERC20(withdrawTokenAddress).approve(msg.sender, amount);
+    bool isSuccessTransferFrom = IERC20(withdrawTokenAddress).transferFrom(address(this), msg.sender, amount);
 
     if (isSuccessApprove && isSuccessTransferFrom) {
       balances[msg.sender] -= amount;
       total -= amount;
-      return (amount, tokenAddress);
+      return (amount, withdrawTokenAddress);
     }
 
     revert("Failed to withdraw");

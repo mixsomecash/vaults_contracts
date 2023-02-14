@@ -22,8 +22,9 @@ contract VaultFactory is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         address _strategyAddress,
         uint256 _fee,
         uint256 _lowerFeeBound,
-        uint256 _upperFeeBound
-    ) public {
+        uint256 _upperFeeBound,
+        bool _isERC20
+    ) external onlyOwner {
         Vault vault = new Vault(
             _operator,
             _depositTokenAddress,
@@ -31,7 +32,8 @@ contract VaultFactory is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             _strategyAddress,
             _fee,
             _lowerFeeBound,
-            _upperFeeBound
+            _upperFeeBound,
+            _isERC20
         );
         address vaultAddress = address(vault);
         vaults.push(vaultAddress);
